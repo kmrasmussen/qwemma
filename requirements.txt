@@ -1,0 +1,7 @@
+gemma @ git+https://github.com/google-deepmind/gemma.git@3d97415726e385c96cae52b9598444c5dfc4fd1d
+jax==0.6.1
+jaxlib==0.6.1
+transformers==4.52.4
+torch==2.7.1
+etils==1.12.2
+treescope==0.1.9
