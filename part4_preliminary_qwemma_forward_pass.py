@@ -38,7 +38,7 @@ class Qwen3Gemma3_06BConfig(transformer.TransformerConfig):
         num_kv_heads=qwen_model_config['num_key_value_heads'],
         use_post_attn_norm=True,
         use_post_ffw_norm=False,
-        use_qk_norm=False,
+        use_qk_norm=True,
         attention_types=make_attention_layers_types(
             GEMMA3_ATTENTION_PATTERN, num_layers=_NUM_LAYERS_GEMMA3_1B
         ),

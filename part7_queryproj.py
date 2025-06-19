@@ -23,7 +23,7 @@ qwen_hf_model_name = "Qwen/Qwen3-0.6B"
 qwen_hf_tokenizer = AutoTokenizer.from_pretrained(qwen_hf_model_name)
 qwen_hf_model_inputs = qwen_hf_tokenizer(["hi there how are"], return_tensors="pt", padding=True)
 qwen_hf_model = AutoModelForCausalLM.from_pretrained(qwen_hf_model_name, torch_dtype=torch.bfloat16)
-
+# %%
 # %%
 attention = gemma.modules.Attention(
   num_heads = qwen_model_config['num_attention_heads'],
@@ -60,8 +60,13 @@ segment_pos = jnp.ones((b,t))
 qwemma_query_proj = attention.apply({'params': attn0_params}, x, segment_pos, None, None)
 # %%
 x_pt = j2t_bfloat16(x)
-hf_query_proj = hf_attn0.forward(x_pt, None, attention_mask=None)
+hf_query_proj, hf_query_proj_prenorm  = hf_attn0.forward(x_pt, None, attention_mask=None)
 hf_query_proj_j = t2j(hf_query_proj)
+hf_query_proj_j = jnp.einsum('abcd->acbd', hf_query_proj_j)
+# %%
+hf_query_proj_j.shape
+# %%
+qwemma_query_proj.shape
 # %%
 max_diff = jnp.max(qwemma_query_proj - hf_query_proj_j)
 print('max diff', max_diff)

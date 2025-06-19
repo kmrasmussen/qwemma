@@ -108,10 +108,14 @@ def get_qwengemma06b_params():
         # layer_0.post_ffw_norm
         layer_s_pre_ffw_norm = None
         layer_s_post_ffw_norm = None
+        # layer_0.attn._query_norm
+        layer_s_attn_query_norm = t2j(qwen_hf_model.model.layers[0].self_attn.q_norm.weight.data)
         layer_s_params = {
             'attn': {
                 '_key_norm': None, # qwen does not use it
-                '_query_norm': None,
+                '_query_norm': {
+                    'scale':  layer_s_attn_query_norm
+                },
                 'attn_vec_einsum': {
                     'w': layer_s_attn_vec_einsum
                 },
