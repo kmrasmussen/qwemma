@@ -19,11 +19,9 @@ from gemma.transformer import _NUM_LAYERS_GEMMA3_1B, make_attention_layers_types
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import treescope
 # %%
-from part3_makeparamsfile import get_qwengemma06b_params, qwen_model_config
+from part3_qwen_params_dict import get_qwengemma06b_params, qwen_model_config, t2j
 # %%
-print(gemma.__file__)
-model_gemma = gm.nn.Gemma3_1B()
-# %%
+
 class Qwen3Gemma3_06BConfig(transformer.TransformerConfig):
   """Custom configuration for Qwen3Gemma3_06B."""
 
@@ -51,6 +49,7 @@ class Qwen3Gemma3_06BConfig(transformer.TransformerConfig):
         local_base_frequency=10_000,
         global_base_frequency=1_000_000,
         vision_encoder=None,
+        qwemma_setting_rescale_embeddings=False
     )
 
 class Qwen3Gemma3_06B(_transformer.Transformer):  # pylint: disable=invalid-name
@@ -67,64 +66,46 @@ class Qwen3Gemma3_06B(_transformer.Transformer):  # pylint: disable=invalid-name
   )
 
 
-model_qwengemma = Qwen3Gemma3_06B()
-# %%
-# %%
-gemma_local_params_epath_str = './params/gemma3_1b_it' # This was for Orbax
-gemma_local_params_absolute_epath = epath.Path(gemma_local_params_epath_str).resolve() # Keep for cleanup if needed
-gemma_params = gm.ckpts.load_params(gemma_local_params_absolute_epath)
-# %%
-gemma_params
-# %%
-# %%
-qwengemma_params = get_qwengemma06b_params()
-# %%
-qwengemma_params
-# %%
-gemma_tokenizer = gm.text.Gemma3Tokenizer()
-# %%
-gemma_tokenizer
-# %%
-print('tokenizing')
-gemmaprompt = gemma_tokenizer.encode('hi there, how are', add_bos=True)
-gemmaprompt_jnparray = jnp.asarray(gemmaprompt)
-# %%
-'''
-out_gemma = model_gemma.apply(
-    {'params': gemma_params},
-    tokens=gemmaprompt_jnparray,
-    return_last_only=True,  # Only predict the last token
-)
-print('out', out)
-'''
-# %%
-qwen_hf_model_name = "Qwen/Qwen3-0.6B"
-qwen_hf_tokenizer = AutoTokenizer.from_pretrained(qwen_hf_model_name)
-# %%
-qwen_hf_model_inputs = qwen_hf_tokenizer(["hi there, how are"], return_tensors="pt", padding=True)
-# %%
-qwen_hf_model_inputs
-# %%
-qwenprompt_jnparray = jax.dlpack.from_dlpack(qwen_hf_model_inputs.input_ids)
-# %%
-qwenprompt_jnparray
-# %%
-gemmaprompt_jnparray
-# %%
-out_gemmaqwen = model_qwengemma.apply(
-    {'params': qwengemma_params},
-    tokens=gemmaprompt_jnparray,
-    return_last_only=True,  # Only predict the last token
-)
-# %%
-# %%
-treescope.show(out_gemmaqwen)
-# %%
-out_gemma = model_gemma.apply(
-    {'params': gemma_params},
-    tokens=gemmaprompt_jnparray,
-    return_last_only=True,  # Only predict the last token
-)
-# %%
-treescope.show(out_gemma)
-# %%
+def get_gemma_params():
+    gemma_local_params_epath_str = './params/gemma3_1b_it' # This was for Orbax
+    gemma_local_params_absolute_epath = epath.Path(gemma_local_params_epath_str).resolve() # Keep for cleanup if needed
+    gemma_params = gm.ckpts.load_params(gemma_local_params_absolute_epath)
+    return gemma_params
+
+def get_gemma_tokenized(input_strings):
+    gemma_tokenizer = gm.text.Gemma3Tokenizer()
+    gemmaprompt = gemma_tokenizer.encode(input_strings, add_bos=True)
+    gemmaprompt_jnparray = jnp.asarray(gemmaprompt)
+    return gemmaprompt_jnparray
+
+def get_qwemma_tokenized(input_strings):
+    qwen_hf_model_name = "Qwen/Qwen3-0.6B"
+    qwen_hf_tokenizer = AutoTokenizer.from_pretrained(qwen_hf_model_name)
+    qwen_hf_model_inputs = qwen_hf_tokenizer(input_strings, return_tensors="pt", padding=True)
+    qwen_hf_model_inputs
+    qwenprompt_jnparray = t2j(qwen_hf_model_inputs.input_ids)
+    return qwenprompt_jnparray
+
+def do_jax_forward_pass(input_ids, model, params_dict):
+    out = model.apply(
+        {'params': params_dict},
+        tokens=input_ids,
+        return_last_only=True,  # Only predict the last token
+        capture_intermediates=True
+    )
+    return out
+
+
+model_gemma = gm.nn.Gemma3_1B()
+model_qwemma = Qwen3Gemma3_06B()
+gemma_params = get_gemma_params()
+qwemma_params = get_qwengemma06b_params()
+prompt = "hi there how are"
+#gemmaprompt_input_ids = get_gemma_tokenized(prompt)
+qwemmaprompt_input_ids = get_qwemma_tokenized(prompt)
+
+#print('gemma forward pass')
+#out_gemma = do_jax_forward_pass(gemmaprompt_input_ids, model_gemma, gemma_params)
+
+#print('qwemma forward pass')
+#out_qwemma = do_jax_forward_pass(qwemmaprompt_input_ids, model_qwemma, qwemma_params)

@@ -11,6 +11,11 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import jax
 import jax.numpy as jnp
 import torch
+def t2j(t: torch.Tensor):
+    return jax.dlpack.from_dlpack(torch.utils.dlpack.to_dlpack(t.contiguous()))
+
+#
+print('gemma file', gemma.__file__)
 # %%
 qwen_model_config = {
   "architectures": [
@@ -53,15 +58,17 @@ def get_qwengemma06b_params():
     qwen_model_name = "Qwen/Qwen3-0.6B"
     qwen_hf_model = AutoModelForCausalLM.from_pretrained(
         qwen_model_name,
-        torch_dtype="auto",
-        device_map="auto"
+        torch_dtype=torch.bfloat16,
+        device_map={"": "cpu"},      # every sub-module → CPU
+        low_cpu_mem_usage=False,     # **materialise** weights immediately
+        offload_state_dict=False,
     )
 
     # embedder.input_embedding 
     qwen_hf_E_in = qwen_hf_model.model.embed_tokens._parameters['weight'].data
-    qwen_E_in_jax = jax.dlpack.from_dlpack(qwen_hf_E_in.cpu().detach())
+    qwen_E_in_jax = t2j(qwen_hf_E_in.cpu().detach())
     # final_norm.scale
-    qwen_gemma_final_norm_scale = jax.dlpack.from_dlpack(qwen_hf_model.model.norm.weight.data)
+    qwen_gemma_final_norm_scale = t2j(qwen_hf_model.model.norm.weight.data)
     qwengemma_params = {}
     qwengemma_params['embedder'] = {
         'input_embedding': qwen_E_in_jax
@@ -70,30 +77,29 @@ def get_qwengemma06b_params():
         'scale': qwen_gemma_final_norm_scale
     }
     def get_params_for_layer(current_layer):
-        layer_s_inputlayernorm_torch_tensor = qwen_hf_model.model.layers[layer_s].input_layernorm._parameters['weight'].data
-        layer_s_inputlayernorm_jax_tensor = jax.dlpack.from_dlpack(layer_s_inputlayernorm_torch_tensor.cpu().detach())
+        layer_s_inputlayernorm_torch_tensor = qwen_hf_model.model.layers[layer_s].input_layernorm._parameters['weight'].data 
+        layer_s_inputlayernorm_jax_tensor = t2j(layer_s_inputlayernorm_torch_tensor.cpu().detach()) #- 1. # subtract 1. because gemma codebase uses rmsnormweights = 1 + scale
         # layer_0.attn.q_einsum
         layer_s_qproj_torch_tensor = current_layer.self_attn.q_proj.weight.data
-        layer_s_qeinsum_jax = jax.dlpack.from_dlpack(layer_s_qproj_torch_tensor.reshape(qwen_model_config['num_attention_heads'], qwen_model_config['hidden_size'], -1))
+        layer_s_qeinsum_jax = t2j(layer_s_qproj_torch_tensor.reshape(qwen_model_config['num_attention_heads'], qwen_model_config['hidden_size'], -1))
         # layer_0.attn.kv_einsum
         layer_s_kv_matrix_torch_tensor = torch.stack((current_layer.self_attn.k_proj.weight.data, 
                 current_layer.self_attn.v_proj.weight.data))
-        kv_einsum = jax.dlpack.from_dlpack(layer_s_kv_matrix_torch_tensor)
+        kv_einsum = t2j(layer_s_kv_matrix_torch_tensor)
         kv_einsum = kv_einsum.reshape(2, qwen_model_config['num_key_value_heads'], qwen_model_config['hidden_size'],  qwen_model_config['head_dim'])
         # layer_0.attn.attn_vec_einsum
-        layer_s_o_proj = jax.dlpack.from_dlpack(current_layer.self_attn.o_proj.weight.data)
+        layer_s_o_proj = t2j(current_layer.self_attn.o_proj.weight.data)
         layer_s_attn_vec_einsum = layer_s_o_proj.reshape(qwen_model_config['num_attention_heads'], qwen_model_config['head_dim'], qwen_model_config['hidden_size'])
         # layer_0.mlp.gating_einsum
-        layer_s_mlp_gating_einsum = jax.dlpack.from_dlpack(torch.stack((current_layer.mlp.gate_proj.weight.data,
+        layer_s_mlp_gating_einsum = t2j(torch.stack((current_layer.mlp.gate_proj.weight.data,
                     current_layer.mlp.up_proj.weight.data)))
         # layer_0.mlp.linear
-        layer_s_mlp_linear = jax.dlpack.from_dlpack(current_layer.mlp.down_proj.weight.data.T)
+        layer_s_mlp_linear = t2j(current_layer.mlp.down_proj.weight.data.T)
         # layer_0.post_attention_norm.scale
-        layer_s_post_attention_layernorm = jax.dlpack.from_dlpack(current_layer.post_attention_layernorm.weight.data)
+        layer_s_post_attention_layernorm = t2j(current_layer.post_attention_layernorm.weight.data)
         # layer_0.post_ffw_norm
         layer_s_pre_ffw_norm = None
         layer_s_post_ffw_norm = None
-        print('adding ws')
         layer_s_params = {
             'attn': {
                 '_key_norm': None, # qwen does not use it
@@ -113,7 +119,7 @@ def get_qwengemma06b_params():
                 'linear': layer_s_mlp_linear,
             },
             'post_attention_norm': {
-                'scale': jax.dlpack.from_dlpack(current_layer.post_attention_layernorm.weight.data)
+                'scale': t2j(current_layer.post_attention_layernorm.weight.data)
             },
             'post_ffw_norm': None,
             'pre_attention_norm': {
