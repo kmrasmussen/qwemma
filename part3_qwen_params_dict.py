@@ -54,6 +54,14 @@ qwen_model_config = {
 # %%
 #treescope.show(gemma_params)
 # %%
+def get_q_einsum_for_layer(current_layer):
+    hf_attn = current_layer.self_attn
+    hf_qproj_weights = hf_attn.q_proj.weight.data
+    hf_qproj_weights_reshaping1 = hf_qproj_weights.T.reshape(qwen_model_config['hidden_size'], qwen_model_config['num_attention_heads'],qwen_model_config['head_dim'])
+    hf_qproj_weights_reshaping2 = torch.einsum('DNH->NDH', hf_qproj_weights_reshaping1)
+    hf_qproj_weights_j = t2j(hf_qproj_weights_reshaping2)
+    return hf_qproj_weights_j
+
 def get_qwengemma06b_params():
     qwen_model_name = "Qwen/Qwen3-0.6B"
     qwen_hf_model = AutoModelForCausalLM.from_pretrained(
@@ -80,8 +88,8 @@ def get_qwengemma06b_params():
         layer_s_inputlayernorm_torch_tensor = qwen_hf_model.model.layers[layer_s].input_layernorm._parameters['weight'].data 
         layer_s_inputlayernorm_jax_tensor = t2j(layer_s_inputlayernorm_torch_tensor.cpu().detach()) #- 1. # subtract 1. because gemma codebase uses rmsnormweights = 1 + scale
         # layer_0.attn.q_einsum
-        layer_s_qproj_torch_tensor = current_layer.self_attn.q_proj.weight.data
-        layer_s_qeinsum_jax = t2j(layer_s_qproj_torch_tensor.reshape(qwen_model_config['num_attention_heads'], qwen_model_config['hidden_size'], -1))
+        #layer_s_qproj_torch_tensor = current_layer.self_attn.q_proj.weight.data
+        #layer_s_qeinsum_jax = t2j(layer_s_qproj_torch_tensor.reshape(qwen_model_config['num_attention_heads'], qwen_model_config['hidden_size'], -1))
         # layer_0.attn.kv_einsum
         layer_s_kv_matrix_torch_tensor = torch.stack((current_layer.self_attn.k_proj.weight.data, 
                 current_layer.self_attn.v_proj.weight.data))
@@ -108,7 +116,7 @@ def get_qwengemma06b_params():
                     'w': layer_s_attn_vec_einsum
                 },
                 'q_einsum': {
-                    'w': layer_s_qeinsum_jax
+                    'w': get_q_einsum_for_layer(current_layer) #layer_s_qeinsum_jax
                 },
                 'kv_einsum': {
                     'w': kv_einsum
