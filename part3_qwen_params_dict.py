@@ -62,6 +62,17 @@ def get_q_einsum_for_layer(current_layer):
     hf_qproj_weights_j = t2j(hf_qproj_weights_reshaping2)
     return hf_qproj_weights_j
 
+def get_kv_einsum_for_layer(current_layer):
+    hf_attn = current_layer.self_attn
+    hf_kproj_weights = hf_attn.k_proj.weight.data
+    hf_qproj_weights = hf_attn.q_proj.weight.data
+    hf_vproj_weights = hf_attn.v_proj.weight.data
+    hf_kproj_weights.shape, hf_qproj_weights.shape
+    hf_kv_weights = t2j(torch.stack([hf_kproj_weights, hf_vproj_weights]))
+    hf_kv_weights_reshaped1 = hf_kv_weights.reshape(2, qwen_model_config['num_key_value_heads'], qwen_model_config['head_dim'], qwen_model_config['hidden_size'])
+    hf_kv_weights_reshaped1.shape
+    hf_kv_weights_reshaped2 = jnp.einsum('cnhd->cndh', hf_kv_weights_reshaped1)
+    return hf_kv_weights_reshaped2
 def get_qwengemma06b_params():
     qwen_model_name = "Qwen/Qwen3-0.6B"
     qwen_hf_model = AutoModelForCausalLM.from_pretrained(
@@ -110,9 +121,13 @@ def get_qwengemma06b_params():
         layer_s_post_ffw_norm = None
         # layer_0.attn._query_norm
         layer_s_attn_query_norm = t2j(qwen_hf_model.model.layers[0].self_attn.q_norm.weight.data)
+        # layer_0.attn._key_norm
+        layer_s_attn_key_norm = t2j(qwen_hf_model.model.layers[0].self_attn.k_norm.weight.data)
         layer_s_params = {
             'attn': {
-                '_key_norm': None, # qwen does not use it
+                '_key_norm': {
+                    'scale':  layer_s_attn_key_norm
+                },
                 '_query_norm': {
                     'scale':  layer_s_attn_query_norm
                 },
@@ -123,7 +138,7 @@ def get_qwengemma06b_params():
                     'w': get_q_einsum_for_layer(current_layer) #layer_s_qeinsum_jax
                 },
                 'kv_einsum': {
-                    'w': kv_einsum
+                    'w': get_kv_einsum_for_layer(current_layer) #kv_einsum
                 },
             },
             'mlp': {
