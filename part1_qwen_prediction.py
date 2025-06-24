@@ -1,6 +1,8 @@
 # Purpose of this script is just to check that we can download Qwen-0.6B from HuggingFace Transformers
 # and get next-token probability distribution for "hi, there ..."
-
+# %%
+#%load_ext autoreload
+#%autoreload 2
 # %%
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -19,9 +21,7 @@ model = AutoModelForCausalLM.from_pretrained(
 # %%
 model
 # %%
-model.forward()
 # %%
-# systemprompt yo, you are a chatbot, user: hi there" assistant:
 messages = [
     {"role": "user", "content": "hi there"}
 ]
