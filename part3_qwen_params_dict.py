@@ -73,6 +73,12 @@ def get_kv_einsum_for_layer(current_layer):
     hf_kv_weights_reshaped1.shape
     hf_kv_weights_reshaped2 = jnp.einsum('cnhd->cndh', hf_kv_weights_reshaped1)
     return hf_kv_weights_reshaped2
+
+def get_attn_vec_einsum_for_layer(current_layer):
+    O1 = t2j(current_layer.self_attn.o_proj.weight.data.reshape(qwen_model_config['hidden_size'], qwen_model_config['num_attention_heads'], qwen_model_config['head_dim']))
+    O2 = jnp.einsum('dnh->nhd', O1)
+    return O2
+
 def get_qwengemma06b_params():
     qwen_model_name = "Qwen/Qwen3-0.6B"
     qwen_hf_model = AutoModelForCausalLM.from_pretrained(
@@ -132,7 +138,7 @@ def get_qwengemma06b_params():
                     'scale':  layer_s_attn_query_norm
                 },
                 'attn_vec_einsum': {
-                    'w': layer_s_attn_vec_einsum
+                    'w': get_attn_vec_einsum_for_layer(current_layer) #layer_s_attn_vec_einsum
                 },
                 'q_einsum': {
                     'w': get_q_einsum_for_layer(current_layer) #layer_s_qeinsum_jax

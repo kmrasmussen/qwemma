@@ -1,4 +1,5 @@
 # Part 6 - The goal of this script is to ensure that the QwemmaRMSNorm and the Huggingface Transformers Qwen3RMSNorm modules behave the same.
+# %%
 from flax import linen
 import jax
 import jax.numpy as jnp
@@ -12,7 +13,7 @@ def j2t_bfloat16(x_jax: jnp.ndarray) -> torch.Tensor:
 def t2j(x_torch: torch.Tensor) -> jnp.ndarray:
     """PyTorch → JAX, robust to any odd strides."""
     return jax.dlpack.from_dlpack(x_torch.detach().contiguous(), copy=True)
-  
+# %%
 class QwemmaRMSNorm(linen.Module):
   """RMSNorm layer."""
 
@@ -45,7 +46,7 @@ class HfQwen3RMSNorm(torch.nn.Module):
 
     def extra_repr(self):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
-  
+# %%
 rmsnorm = QwemmaRMSNorm()
 key = jax.random.key(0)
 key_x, key = jax.random.split(key)
@@ -69,3 +70,6 @@ myhfqwenrmsnorm.weight.data = scale_pt
 hf_rmsnorm_output = myhfqwenrmsnorm.forward(x_pt)
 hf_rmsnorm_output_j = t2j(hf_rmsnorm_output)
 assert jnp.allclose(hf_rmsnorm_output_j, qwemma_rms_out), "RMSNorm outputs do not agree"
+# %%
+jnp.allclose(hf_rmsnorm_output_j, qwemma_rms_out)
+# %%
