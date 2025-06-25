@@ -109,3 +109,4 @@ qwemmaprompt_input_ids = get_qwemma_tokenized(prompt)
 
 #print('qwemma forward pass')
 #out_qwemma = do_jax_forward_pass(qwemmaprompt_input_ids, model_qwemma, qwemma_params)
+# %%

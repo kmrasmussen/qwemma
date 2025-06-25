@@ -83,6 +83,8 @@ jnp.max(t2j(hf_attn_output) - qwemma_attn_output)
 # %%
 jnp.sum(t2j(hf_attn_output) != qwemma_attn_output)
 # %%
+qwemma_attn_output.std()
+# %%
 hf_attn_output_preproj.shape
 # %%
 hf_attn_output_preproj_reshaped = hf_attn_output_preproj.reshape(*x_pt.shape[:-1], -1).contiguous()
