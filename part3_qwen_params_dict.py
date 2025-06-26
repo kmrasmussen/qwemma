@@ -154,13 +154,13 @@ def get_qwengemma06b_params():
             'post_attention_norm': {
                 'scale': t2j(current_layer.post_attention_layernorm.weight.data)
             },
-            'post_ffw_norm': None,
+            #'post_ffw_norm': None,
             'pre_attention_norm': {
                 'scale': layer_s_inputlayernorm_jax_tensor
             },
-            'pre_ffw_norm': {
-                'scale': layer_s_inputlayernorm_jax_tensor
-            }
+            #'pre_ffw_norm': {
+            #    'scale': layer_s_inputlayernorm_jax_tensor
+            #}
         }
         return layer_s_params
     for s in range(qwen_model_config['num_hidden_layers']):

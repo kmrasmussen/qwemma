@@ -18,6 +18,7 @@ from gemma.gm.ckpts import _paths
 from gemma.transformer import _NUM_LAYERS_GEMMA3_1B, make_attention_layers_types, GEMMA3_ATTENTION_PATTERN, QueryPreAttentionNormalisation
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import treescope
+import math
 # %%
 from part3_qwen_params_dict import get_qwengemma06b_params, qwen_model_config, t2j
 # %%
@@ -46,10 +47,11 @@ class Qwen3Gemma3_06BConfig(transformer.TransformerConfig):
         attn_logits_soft_cap=None,
         sliding_window_size=512,
         transpose_gating_einsum=True,
-        local_base_frequency=10_000,
-        global_base_frequency=1_000_000,
+        local_base_frequency=1_000_000,
+        global_base_frequency=1_000_000, # fix it so that this is used instead fo local_base_frequency
         vision_encoder=None,
-        qwemma_setting_rescale_embeddings=False
+        qwemma_setting_rescale_embeddings=False,
+        query_pre_attn_scalar=1.0 / math.sqrt(qwen_model_config['head_dim'])
     )
 
 class Qwen3Gemma3_06B(_transformer.Transformer):  # pylint: disable=invalid-name
